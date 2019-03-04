@@ -21,16 +21,24 @@ catkin_package(
 #  DEPENDS system_lib
 )
 
-
 include_directories(
-# include
+  include
   ${catkin_INCLUDE_DIRS}
+)
+
+add_library(wall_follow
+  src/WallFollow.cpp
+)
+target_link_libraries(wall_follow
+  ${catkin_LIBRARIES}
 )
 
 add_executable(main
   src/main.cpp
+  src/WallFollow.cpp
 )
 target_link_libraries(main
   yaml-cpp
+  wall_follow
   ${catkin_LIBRARIES}
 )
