@@ -73,6 +73,9 @@ class WallFollow {
   ros::Publisher right_marker_pub;
   ros::Publisher laser_marker_pub;
   ros::Publisher start_pub;
+
+  std::vector<double> angle_vec;
+  std::vector<double> value_vec;
 };
 
 }

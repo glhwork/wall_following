@@ -8,12 +8,16 @@ using wall::XYMap;
 using wall::XYMapVec;
 using wall::LineParam;
 
+// a vertical line appears suddenly in the fitting process
+// check whether the final line parameter is empty
+// the problem about nan
+
 
 WallFollow::WallFollow(ros::NodeHandle n, const std::string add) {
 
   YAML::Node config = YAML::LoadFile(add);
   xy_map.clear(); 
-  map_flag = false; 
+  map_flag = true; 
   laser_flag = false;
   limit = config["limit"].as<double>();
   least_n = config["least_n"].as<size_t>();
@@ -83,22 +87,10 @@ void WallFollow::GetOdometryCallback(const nav_msgs::Odometry& pose) {
     base_point(0, 3) = pose.pose.pose.position.x;
     base_point(1, 3) = pose.pose.pose.position.y;
     base_point(2, 3) = 0;
-    
-    // XYMapVec laser_points_base
-    // for (size_t i = 0; i < laser_points.size(); i++) {
-    //   Eigen::Vector4d v_tmp;
-    //   v_tmp << laser_points[i].x, laser_points[i].y, 0, 1;
-    //   Eigen::Vector4d v = base_point * v_tmp;
-
-    // }
-    PubStart(base_point);
-
-
 
     XYMapVec laser_points_base_left;
     XYMapVec laser_points_base_right;
     std::cout << "==============================" << std::endl;
-    std::cout << "size of laser points is : " << laser_points.size() << std::endl;
     for (size_t i = 0; i < laser_points.size(); i++) {
 
       if (laser_points[i].y > 0) {
@@ -120,7 +112,7 @@ void WallFollow::GetOdometryCallback(const nav_msgs::Odometry& pose) {
     //==========================================
     visualization_msgs::Marker left_marker, right_marker;
     left_marker.header.frame_id = 
-    right_marker.header.frame_id = "map";
+    right_marker.header.frame_id = "laser";
     left_marker.header.stamp = 
     right_marker.header.stamp = ros::Time::now();
     left_marker.ns = right_marker.ns = "splited_marker";
@@ -160,30 +152,9 @@ void WallFollow::GetOdometryCallback(const nav_msgs::Odometry& pose) {
     left_marker_pub.publish(left_marker);
     right_marker_pub.publish(right_marker);
 
-    //==========================================
-
-    std::cout << "size of laser left is : " << laser_points_base_left.size() << std::endl;
-    std::cout << "size of laser right is : " << laser_points_base_right.size() << std::endl;
     std::vector<XYMapVec> laser_left_cut = LineCut(laser_points_base_left);
     std::vector<XYMapVec> laser_right_cut = LineCut(laser_points_base_right);
     
-    std::cout << "size of cut left is : " << laser_left_cut.size() << std::endl;
-    std::cout << "size of cut right is : " << laser_right_cut.size() << std::endl;
-
-
-    std::cout << "actual size of left is : ";
-    for (size_t i = 0; i < laser_left_cut.size(); i++) {
-      std::cout << laser_left_cut[i].size() << "  ";
-    }
-    std::cout << std::endl;
-
-    std::cout << "actual size of right is : ";
-    for (size_t i = 0; i < laser_right_cut.size(); i++) {
-      std::cout << laser_right_cut[i].size() << "  ";
-    }
-    std::cout << std::endl;
-
-    std::cout << "============================" << std::endl;
     std::vector<LineParam> line_left_param, line_right_param;
     if (laser_left_cut.size() > 0) {
       line_left_param = LinearFit(laser_left_cut);
@@ -195,14 +166,15 @@ void WallFollow::GetOdometryCallback(const nav_msgs::Odometry& pose) {
     } else {
       line_right_param.push_back(LineParam(0, 0, false));
     } // attention! k = 0 and b = 0 can also represent a straight line
-
+    
     Eigen::Vector2d position(pose.pose.pose.position.x,
                              pose.pose.pose.position.y);
     
     LineParam line = GetLine(line_left_param, 
                              line_right_param, 
                              position);
-
+    std::cout << "k is : " << line.k << " and b is : " << line.b << std::endl;
+    std::cout << "============================" << std::endl;
     Eigen::Matrix4d car_point = base_point.inverse();
     
     PubLine(line);
@@ -214,16 +186,17 @@ void WallFollow::GetOdometryCallback(const nav_msgs::Odometry& pose) {
 
 void WallFollow::GetScanCallback(const sensor_msgs::LaserScan& scan) {
   
-  // get coordinates of laser points w.r.t base_link frame
+  // get coordinates of laser points w.r.t base_link frame rather than world frame
   laser_points.clear();
+  double delta_angle = scan.angle_increment;
   for (size_t i = 0; i < scan.ranges.size(); i++) {
 
     double range = scan.ranges[i];
     if (range <= scan.range_max && range <= limit) {
 
       XYMap laser_points_tmp;
-      laser_points_tmp.x = range * cos(i * 0.0175);
-      laser_points_tmp.y = range * sin(i * 0.0175);
+      laser_points_tmp.x = range * cos(scan.angle_min + i * delta_angle);
+      laser_points_tmp.y = range * sin(scan.angle_min + i * delta_angle);
       laser_points.push_back(laser_points_tmp);
 
     }
@@ -238,7 +211,7 @@ void WallFollow::PubMap() {
 
   visualization_msgs::Marker marker;
   marker.header.stamp = ros::Time::now();
-  marker.header.frame_id = "map";
+  marker.header.frame_id = "laser";
   marker.ns = "map_marker";
   marker.id = 1;
   marker.type = visualization_msgs::Marker::POINTS;
@@ -272,7 +245,11 @@ std::vector<XYMapVec> WallFollow::LineCut(const XYMapVec& vec) {
   std::vector<XYMapVec> result_vec;
   result_vec_tmp.clear();
   result_vec.clear();
-  // std::cout << vec.size() << std::endl;
+  std::cout << vec.size() << std::endl;
+
+  int count = 0;
+  angle_vec.clear();
+  value_vec.clear();
   
   size_t index = 0;
   if (vec.size() > 2) {
@@ -292,35 +269,53 @@ std::vector<XYMapVec> WallFollow::LineCut(const XYMapVec& vec) {
         //  This equation is only for making "angle_rad" less than 
         //  "angle_limit", no other actual meaning
         angle_rad = angle_limit / 2;
-        std::cout << "i get zero" << std::endl;
       } else {
-        angle_rad = fabs(acos(v1.dot(v2) / (nv1 * nv2)));
+        double var = v1.dot(v2) / (nv1 * nv2);
+        if (1 == var) {
+          angle_rad = 0;
+        } else {
+          angle_rad = fabs(acos(var));
+        }
       }
-      // std::cout << "angle is : " << angle_rad << std::endl;
+
       XYMap result_tmp;
       result_tmp.x = vec[i].x;
       result_tmp.y = vec[i].y;
-      if (angle_rad <= angle_limit) {
+
+      if (angle_rad > angle_limit) {
+        count++;
+      }
+      
+      //================
+      angle_vec.push_back(angle_rad);
+      value_vec.push_back(v1.dot(v2) / (nv1 * nv2));
+
+      if (std::isnan(angle_rad)) {
+        angle_rad = 0;
+      }
+      //================
+      if (angle_rad <= angle_limit || std::isnan(angle_rad)) {
         result_vec_tmp.push_back(result_tmp);
-      } else if (result_vec_tmp.size() > least_n) {
+      } else if (result_vec_tmp.size() < least_n) {
+        result_vec_tmp.clear();
+        result_vec_tmp.push_back(result_tmp);
+        index = i;      
+      }
+      if (angle_rad > angle_limit && result_vec_tmp.size() > least_n) {
         // std::cout << "i push into result_vec" << std::endl;
         result_vec.push_back(result_vec_tmp);
         // std::cout << "size now is : " << result_vec.size() << std::endl;
         result_vec_tmp.clear();
         result_vec_tmp.push_back(result_tmp);
         index = i;      
-      }
-      // std::cout << "====================" << std::endl;
-      // std::cout << angle_rad << std::endl;
-      // std::cout << result_vec_tmp.size() << std::endl;
-      // std::cout << "====================" << std::endl;
+      }  
     }
   }
+  std::cout << "count is : " << count << std::endl;
   if (result_vec_tmp.size() > least_n) {
     result_vec.push_back(result_vec_tmp);
   }
   
-  // std::cout << "i finish" << std::endl;
   return result_vec;
 
 }
@@ -329,7 +324,7 @@ std::vector<XYMapVec> WallFollow::LineCut(const XYMapVec& vec) {
 void WallFollow::PubCircle(const Eigen::Matrix4d& base_point) {
   int circle_reso = 20;
   nav_msgs::Path circle;
-  circle.header.frame_id = "map";
+  circle.header.frame_id = "laser";
   circle.header.stamp = ros::Time::now();
 
   for (size_t i = 0; i <= circle_reso; i++) {
@@ -352,25 +347,11 @@ void WallFollow::PubCircle(const Eigen::Matrix4d& base_point) {
 }
 
 void WallFollow::PubLine(const LineParam& line) {
-  
-  // Eigen::Vector4d p_tmp;
-
-  // p_tmp(0) = 0;
-  // p_tmp(1) = result(0) * p_tmp(0) + result(1);
-  // p_tmp(2) = 0;
-  // p_tmp(3) = 1;
-  // Eigen::Vector4d start = (car_point * map_transform).inverse() * p_tmp;
-
-  // p_tmp(0) = 20;
-  // p_tmp(1) = result(0) * p_tmp(1) + result(1);
-  // p_tmp(2) = 0;
-  // p_tmp(3) = 1;
-  // Eigen::Vector4d end = (car_point * map_transform).inverse() * p_tmp;
 
   nav_msgs::Path wall_path;
   wall_path.header.seq++;
   wall_path.header.stamp = ros::Time::now();
-  wall_path.header.frame_id = "map";
+  wall_path.header.frame_id = "laser";
 
   geometry_msgs::PoseStamped p1, p2;
   p1.pose.position.x = -10;
@@ -397,16 +378,13 @@ LineParam WallFollow::GetLine(const std::vector<LineParam>& right,
   const double y = position(1);
   LineParam line_final;
 
-  // std::cout << "=======================" << std::endl;
   for (size_t i = 0; i < right.size(); i++) {
-    if (right[i].is_line) {
+    if (right[i].is_line && !std::isnan(right[i].k)) {
       double k = right[i].k;
-      double b = right[i].b;
-      
-      // std::cout << "k is " << k << " and b is " << b << std::endl;
-      
+      double b = right[i].b; 
       double l = fabs(k * x - y + b) / sqrt(k * k + 1);
-      if (l > min_l) {
+
+      if (l < min_l) {
         line_final.k = k;
         line_final.b = b;
         line_final.is_line = true;
@@ -414,18 +392,14 @@ LineParam WallFollow::GetLine(const std::vector<LineParam>& right,
       }
     }
   }
-  // std::cout << "=======================" << std::endl;
-  
-  // std::cout << "***********************" << std::endl;
+
   for (size_t i = 0; i < left.size(); i++) {
-    if (left[i].is_line) {
+    if (left[i].is_line && !std::isnan(left[i].k)) {
       double k = left[i].k;
-      double b = left[i].b;
-      
-      // std::cout << "k is " << k << " and b is " << b << std::endl;
-      
+      double b = left[i].b;      
       double l = fabs(k * x - y + b) / sqrt(k * k + 1);
-      if (l > min_l) {
+
+      if (l < min_l) {
         line_final.k = k;
         line_final.b = b;
         line_final.is_line = true;
@@ -433,8 +407,7 @@ LineParam WallFollow::GetLine(const std::vector<LineParam>& right,
       }
     }
   } 
-  // std::cout << "***********************" << std::endl; 
-  // std::cout << "k is " << line_final.k << " and b is " << line_final.b << std::endl;
+  
   return line_final;
 }
 
@@ -462,7 +435,7 @@ std::vector<LineParam> WallFollow::LinearFit(const std::vector<XYMapVec>& cut) {
 
 void WallFollow::PubStart(const Eigen::Matrix4d& base) {
   visualization_msgs::Marker s;
-  s.header.frame_id = "map";
+  s.header.frame_id = "laser";
   s.header.stamp = ros::Time::now();
   s.ns = "start point";
   s.id = 0;
