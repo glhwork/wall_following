@@ -1,9 +1,9 @@
-#include "wall_following/WallFollow.h"
+#include "wall_following/WallDetect.h"
 
 using Eigen::ComputeThinU;
 using Eigen::ComputeThinV;
 
-using wall::WallFollow;
+using wall::WallDetect;
 using wall::XYMap;
 using wall::XYMapVec;
 using wall::LineParam;
@@ -13,28 +13,20 @@ using wall::LineParam;
 // the problem about nan
 
 
-WallFollow::WallFollow(ros::NodeHandle n, const std::string add) {
+WallDetect::WallDetect() {
 
-  YAML::Node config = YAML::LoadFile(add);
   xy_map.clear(); 
   map_flag = true; 
   laser_flag = false;
-  limit = config["limit"].as<double>();
-  least_n = config["least_n"].as<size_t>();
-  angle_limit = config["angle_limit"].as<double>();
+  
   map_transform = Eigen::Matrix4d::Identity();
 
-  wall_path_pub = n.advertise<nav_msgs::Path>("path", 100);
-  circle_pub = n.advertise<nav_msgs::Path>("circle", 100);
-  marker_pub = n.advertise<visualization_msgs::Marker>("map_points", 100);
-  left_marker_pub = n.advertise<visualization_msgs::Marker>("left_points", 100);
-  right_marker_pub = n.advertise<visualization_msgs::Marker>("right_points", 100);
-  laser_marker_pub = n.advertise<visualization_msgs::Marker>("laser_points", 100);
-  start_pub = n.advertise<visualization_msgs::Marker>("start_point", 100);
+  ParamInit();
+  Setup();
 
 }
 
-void WallFollow::GetMapCallback(const nav_msgs::OccupancyGrid& map) {
+void WallDetect::GetMapCallback(const nav_msgs::OccupancyGrid& map) {
   double reso = map.info.resolution;
   int width = map.info.width;
   int height = map.info.height;
@@ -63,7 +55,7 @@ void WallFollow::GetMapCallback(const nav_msgs::OccupancyGrid& map) {
 }
 
 
-void WallFollow::GetOdometryCallback(const nav_msgs::Odometry& pose) {
+void WallDetect::GetOdometryCallback(const nav_msgs::Odometry& pose) {
 
   if (map_flag && laser_flag) {
     Eigen::Vector4d quat(pose.pose.pose.orientation.x,
@@ -184,7 +176,7 @@ void WallFollow::GetOdometryCallback(const nav_msgs::Odometry& pose) {
 
 }
 
-void WallFollow::GetScanCallback(const sensor_msgs::LaserScan& scan) {
+void WallDetect::GetScanCallback(const sensor_msgs::LaserScan& scan) {
   
   // get coordinates of laser points w.r.t base_link frame rather than world frame
   laser_points.clear();
@@ -206,7 +198,33 @@ void WallFollow::GetScanCallback(const sensor_msgs::LaserScan& scan) {
 
 }
 
-void WallFollow::PubMap() {
+void WallDetect::ParamInit() {
+
+  if (!nh.getParam("limit", limit)) {
+    limit = 10.0;
+  }
+  if (!nh.getParam("least_n", least_n)) {
+    least_n = 30;
+  }
+  if (!nh.getParam("angle_limit", angle_limit)) {
+    angle_limit = 0.088;
+  }
+
+}
+
+void WallDetect::Setup() {
+
+  wall_path_pub = n.advertise<nav_msgs::Path>("path", 100);
+  circle_pub = n.advertise<nav_msgs::Path>("circle", 100);
+  marker_pub = n.advertise<visualization_msgs::Marker>("map_points", 100);
+  left_marker_pub = n.advertise<visualization_msgs::Marker>("left_points", 100);
+  right_marker_pub = n.advertise<visualization_msgs::Marker>("right_points", 100);
+  laser_marker_pub = n.advertise<visualization_msgs::Marker>("laser_points", 100);
+  start_pub = n.advertise<visualization_msgs::Marker>("start_point", 100);
+
+}
+
+void WallDetect::PubMap() {
   visualization_msgs::Marker map_marker;
 
   visualization_msgs::Marker marker;
@@ -239,7 +257,7 @@ void WallFollow::PubMap() {
 
 }
 
-std::vector<XYMapVec> WallFollow::LineCut(const XYMapVec& vec) {
+std::vector<XYMapVec> WallDetect::LineCut(const XYMapVec& vec) {
 
   XYMapVec result_vec_tmp;
   std::vector<XYMapVec> result_vec;
@@ -321,7 +339,7 @@ std::vector<XYMapVec> WallFollow::LineCut(const XYMapVec& vec) {
 }
 
 
-void WallFollow::PubCircle(const Eigen::Matrix4d& base_point) {
+void WallDetect::PubCircle(const Eigen::Matrix4d& base_point) {
   int circle_reso = 20;
   nav_msgs::Path circle;
   circle.header.frame_id = "laser";
@@ -346,7 +364,7 @@ void WallFollow::PubCircle(const Eigen::Matrix4d& base_point) {
   circle_pub.publish(circle);
 }
 
-void WallFollow::PubLine(const LineParam& line) {
+void WallDetect::PubLine(const LineParam& line) {
 
   nav_msgs::Path wall_path;
   wall_path.header.seq++;
@@ -369,7 +387,7 @@ void WallFollow::PubLine(const LineParam& line) {
 
 }
 
-LineParam WallFollow::GetLine(const std::vector<LineParam>& right,
+LineParam WallDetect::GetLine(const std::vector<LineParam>& right,
                               const std::vector<LineParam>& left,
                               const Eigen::Vector2d& position) {
 
@@ -411,7 +429,7 @@ LineParam WallFollow::GetLine(const std::vector<LineParam>& right,
   return line_final;
 }
 
-std::vector<LineParam> WallFollow::LinearFit(const std::vector<XYMapVec>& cut) {
+std::vector<LineParam> WallDetect::LinearFit(const std::vector<XYMapVec>& cut) {
 
  
   std::vector<LineParam> line_param;
@@ -433,7 +451,7 @@ std::vector<LineParam> WallFollow::LinearFit(const std::vector<XYMapVec>& cut) {
   return line_param;
 }
 
-void WallFollow::PubStart(const Eigen::Matrix4d& base) {
+void WallDetect::PubStart(const Eigen::Matrix4d& base) {
   visualization_msgs::Marker s;
   s.header.frame_id = "laser";
   s.header.stamp = ros::Time::now();

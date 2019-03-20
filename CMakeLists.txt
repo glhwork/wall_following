@@ -26,19 +26,19 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
 )
 
-add_library(wall_follow
-  src/WallFollow.cpp
+add_library(wall-follow
+  src/WallDetect.cpp
 )
-target_link_libraries(wall_follow
+target_link_libraries(wall-follow
   ${catkin_LIBRARIES}
 )
 
-add_executable(main
-  src/main.cpp
-  src/WallFollow.cpp
+add_executable(wall_detect
+  src/wall_detect.cpp
+  src/WallDetect.cpp
 )
-target_link_libraries(main
+target_link_libraries(wall_detect
   yaml-cpp
-  wall_follow
+  wall-follow
   ${catkin_LIBRARIES}
 )
