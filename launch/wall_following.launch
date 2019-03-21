@@ -4,6 +4,8 @@
   	<param name="limit" type="double" value="10.0"/>
   	<param name="least_n" type="int" value="30"/>
   	<param name="angle_limit" type="double" value="0.088"/>
+  	<param name="laser_frame" type="str" value="base_scan"/>
+  	<param name="map_frame" type="str" value="map"/>
   </node>
 
 </launch>

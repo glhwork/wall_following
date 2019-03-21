@@ -1,3 +1,6 @@
+#ifndef WALLDETECT_H
+#define WALLDETECT_H
+
 #include <iostream>
 #include <vector>
 #include <string>
@@ -5,16 +8,23 @@
 #include <fstream>
 #include <eigen3/Eigen/Dense>
 
-
 #include "yaml-cpp/yaml.h"
 
 #include "ros/ros.h"
+
 #include "nav_msgs/OccupancyGrid.h"
 #include "nav_msgs/Odometry.h"
 #include "nav_msgs/Path.h"
+
 #include "sensor_msgs/LaserScan.h"
+
 #include "visualization_msgs/Marker.h"
 #include "visualization_msgs/MarkerArray.h"
+
+#include "tf/transform_listener.h"
+
+#include "geometry_msgs/PoseStamped.h"
+
 
 #define PI 3.1415926
 
@@ -25,8 +35,7 @@ struct XYMap {
   XYMap() {}
   double x;
   double y;
-  // PointState state;
-};
+};  // struct XYMap
 typedef std::vector<XYMap> XYMapVec;
 
 struct LineParam {
@@ -36,17 +45,18 @@ struct LineParam {
   double k;
   double b;
   bool is_line;
-};
+};  // struct LineParam
 
 class WallDetect {
  public:
-  WallDetect();
+  WallDetect(ros::NodeHandle n);
+  WallDetect() {}
   ~WallDetect() {}
-  void GetMapCallback(const nav_msgs::OccupancyGrid& map);
-  void GetOdometryCallback(const nav_msgs::Odometry& pose);
+  // void GetMapCallback(const nav_msgs::OccupancyGrid& map);
+  void FindWall();
   void GetScanCallback(const sensor_msgs::LaserScan& scan);
   void ParamInit();
-  void Setup();
+  void Setup(ros::NodeHandle n);
   void PublisherInit();
   std::vector<XYMapVec> LineCut(const XYMapVec& vec);
   std::vector<LineParam> LinearFit(const std::vector<XYMapVec>& cut);
@@ -60,15 +70,17 @@ class WallDetect {
  private:
   XYMapVec xy_map;
   XYMapVec laser_points;
-  bool map_flag;
-  bool laser_flag;
+  // bool map_flag;
+  bool get_laser;
   double limit;
   double angle_limit;
   size_t least_n;
-  Eigen::Matrix4d map_transform;
+  // Eigen::Matrix4d map_transform;
+  std::string laser_frame;
+  std::string map_frame;
 
   // attention! if multiple nodes initial node handles with ("~")
-  ros::NodeHandle nh("~");
+  ros::NodeHandle nh;
   ros::NodeHandle n;
   ros::Publisher wall_path_pub;
   ros::Publisher circle_pub;
@@ -80,6 +92,8 @@ class WallDetect {
 
   std::vector<double> angle_vec;
   std::vector<double> value_vec;
-};
+};  // class WallDetect
 
-}
+}  // namespace wall
+
+#endif

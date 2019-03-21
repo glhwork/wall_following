@@ -13,72 +13,82 @@ using wall::LineParam;
 // the problem about nan
 
 
-WallDetect::WallDetect() {
+WallDetect::WallDetect(ros::NodeHandle n) {
 
   xy_map.clear(); 
-  map_flag = true; 
-  laser_flag = false;
-  
-  map_transform = Eigen::Matrix4d::Identity();
+  // map_flag = true; 
+  get_laser = false;
+  nh = ros::NodeHandle("~");
+  // map_transform = Eigen::Matrix4d::Identity();
 
   ParamInit();
-  Setup();
+  Setup(n);
 
 }
 
-void WallDetect::GetMapCallback(const nav_msgs::OccupancyGrid& map) {
-  double reso = map.info.resolution;
-  int width = map.info.width;
-  int height = map.info.height;
-  map_transform(0,3) = map.info.origin.position.x;
-  map_transform(1,3) = map.info.origin.position.y;
+// void WallDetect::GetMapCallback(const nav_msgs::OccupancyGrid& map) {
+//   double reso = map.info.resolution;
+//   int width = map.info.width;
+//   int height = map.info.height;
+//   map_transform(0,3) = map.info.origin.position.x;
+//   map_transform(1,3) = map.info.origin.position.y;
 
-  for (size_t i = 0; i < width; i++) {
-    for (size_t j = 0; j < height; j++) {
-      //int n = i * width + j;
-      int n = i + j * height;
-      if (100 == map.data[n]) {
-        Eigen::Vector4d v_tmp;
-        v_tmp << (i + 0.5) * reso, (j + 0.5) * reso, 0, 1;
-        Eigen::Vector4d v = map_transform * v_tmp;
+//   for (size_t i = 0; i < width; i++) {
+//     for (size_t j = 0; j < height; j++) {
+//       //int n = i * width + j;
+//       int n = i + j * height;
+//       if (100 == map.data[n]) {
+//         Eigen::Vector4d v_tmp;
+//         v_tmp << (i + 0.5) * reso, (j + 0.5) * reso, 0, 1;
+//         Eigen::Vector4d v = map_transform * v_tmp;
 
-        XYMap xy_map_tmp;
-        xy_map_tmp.x = v(0);
-        xy_map_tmp.y = v(1);
-        xy_map.push_back(xy_map_tmp);
-      }
-    }
-  }
+//         XYMap xy_map_tmp;
+//         xy_map_tmp.x = v(0);
+//         xy_map_tmp.y = v(1);
+//         xy_map.push_back(xy_map_tmp);
+//       }
+//     }
+//   }
   
-  map_flag = true;
+//   map_flag = true;
 
-}
+// }
 
 
-void WallDetect::GetOdometryCallback(const nav_msgs::Odometry& pose) {
+void WallDetect::FindWall() {
 
-  if (map_flag && laser_flag) {
-    Eigen::Vector4d quat(pose.pose.pose.orientation.x,
-                         pose.pose.pose.orientation.y,
-                         pose.pose.pose.orientation.z,
-                         pose.pose.pose.orientation.w);
+  if (get_laser) {
     
-    Eigen::Quaternion<double> q(quat(3), quat(0), quat(1), quat(2));
-    Eigen::Matrix3d rot = q.matrix();
+    // Eigen::Vector4d quat(pose.pose.pose.orientation.x,
+    //                      pose.pose.pose.orientation.y,
+    //                      pose.pose.pose.orientation.z,
+    //                      pose.pose.pose.orientation.w);
+    
+    // Eigen::Quaternion<double> q(quat(3), quat(0), quat(1), quat(2));
+    // Eigen::Matrix3d rot = q.matrix();
 
-    // std::cout << "===============" << std::endl;
-    // std::cout << "quater is : " << qua_x << "  " 
-    //                             << qua_y << "  " 
-    //                             << qua_z << "  " 
-    //                             << qua_w << std::endl;
-    // std::cout << "rotation matrix : " << std::endl
-    //           << rot << std::endl;
+    // Eigen::Matrix4d base_point = Eigen::Matrix4d::Identity();
+    // base_point.block(0, 0, 3, 3) = rot;
+    // base_point(0, 3) = pose.pose.pose.position.x;
+    // base_point(1, 3) = pose.pose.pose.position.y;
+    // base_point(2, 3) = 0;
 
-    Eigen::Matrix4d base_point = Eigen::Matrix4d::Identity();
-    base_point.block(0, 0, 3, 3) = rot;
-    base_point(0, 3) = pose.pose.pose.position.x;
-    base_point(1, 3) = pose.pose.pose.position.y;
-    base_point(2, 3) = 0;
+    tf::TransformListener listener;
+    // this represents pose of laser frame w.r.t. map frame
+    tf::StampedTransform laser_to_map;
+    try {
+      listener.waitForTransform(laser_frame, 
+                                map_frame, 
+                                ros::Time(0), 
+                                ros::Duration(1.0));
+      listener.lookupTransform(laser_frame, 
+                               map_frame, 
+                               ros::Time(0), 
+                               laser_to_map);
+    } catch (tf::TransformException &ex) {
+      ROS_ERROR("Get errors in wall detect : %s", ex.what());
+      ros::Duration(1.0).sleep();
+    }
 
     XYMapVec laser_points_base_left;
     XYMapVec laser_points_base_right;
@@ -194,7 +204,7 @@ void WallDetect::GetScanCallback(const sensor_msgs::LaserScan& scan) {
     }
 
   }
-  laser_flag = true; 
+  get_laser = true; 
 
 }
 
@@ -209,10 +219,22 @@ void WallDetect::ParamInit() {
   if (!nh.getParam("angle_limit", angle_limit)) {
     angle_limit = 0.088;
   }
+  if (!nh.getParam("laser_frame", laser_frame)) {
+    laser_frame = "base_scan";
+  }
+  if (!nh.getParam("map_frame", map_frame)) {
+    laser_frame = "map";
+  }
+
 
 }
 
-void WallDetect::Setup() {
+void WallDetect::Setup(ros::NodeHandle n) {
+
+  // ros::Subscriber map_sub = n.subscribe("map", 100, &WallDetect::GetMapCallback, &follow);
+  // ros::Subscriber odom_sub = n.subscribe("odom", 100, &WallDetect::GetOdometryCallback, &follow);
+  // ros::Subscriber scan_sub = n.subscribe("scan", 100, &WallDetect::GetScanCallback, &follow);
+
 
   wall_path_pub = n.advertise<nav_msgs::Path>("path", 100);
   circle_pub = n.advertise<nav_msgs::Path>("circle", 100);
@@ -221,6 +243,12 @@ void WallDetect::Setup() {
   right_marker_pub = n.advertise<visualization_msgs::Marker>("right_points", 100);
   laser_marker_pub = n.advertise<visualization_msgs::Marker>("laser_points", 100);
   start_pub = n.advertise<visualization_msgs::Marker>("start_point", 100);
+
+}
+
+void WallDetect::Loop() {
+
+  // for subscriber or timer
 
 }
 
