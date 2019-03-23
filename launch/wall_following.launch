@@ -8,4 +8,7 @@
   	<param name="map_frame" type="str" value="map"/>
   </node>
 
+
+
+
 </launch>
