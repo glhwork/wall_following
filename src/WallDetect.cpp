@@ -55,9 +55,9 @@ WallDetect::WallDetect(ros::NodeHandle n) {
 // }
 
 
-void WallDetect::FindWall() {
+void WallDetect::FindWallCallback(const ros::TimerEvent&) {
 
-  if (get_laser) {
+    if (get_laser) {
     
     // Eigen::Vector4d quat(pose.pose.pose.orientation.x,
     //                      pose.pose.pose.orientation.y,
@@ -72,115 +72,99 @@ void WallDetect::FindWall() {
     // base_point(0, 3) = pose.pose.pose.position.x;
     // base_point(1, 3) = pose.pose.pose.position.y;
     // base_point(2, 3) = 0;
+    XYMapVec laser_points_map;
+    std::vector<geometry_msgs::PointStamped> trans_input_vec;
+    ros::Time stamp = ros::Time(0);
+    for (size_t i = 0; i < laser_points.size(); i++) {
+      geometry_msgs::PointStamped trans_input_tmp;
+      trans_input_tmp.point.x = laser_points[i].x;
+      trans_input_tmp.point.y = laser_points[i].y;
+      trans_input_tmp.point.z = 0.0;
+      trans_input_tmp.header.frame_id = laser_frame;
+      trans_input_tmp.header.stamp = stamp;
 
+      trans_input_vec.push_back(trans_input_tmp);
+    }
     tf::TransformListener listener;
     // this represents pose of laser frame w.r.t. map frame
     tf::StampedTransform laser_to_map;
     try {
-      listener.waitForTransform(laser_frame, 
-                                map_frame, 
-                                ros::Time(0), 
+      listener.waitForTransform(map_frame ,
+                                laser_frame, 
+                                stamp, 
                                 ros::Duration(1.0));
-      listener.lookupTransform(laser_frame, 
-                               map_frame, 
-                               ros::Time(0), 
-                               laser_to_map);
+      for (size_t i = 0; i < trans_input_vec.size(); i++) {
+        XYMap laser_points_map_tmp;
+        geometry_msgs::PointStamped trans_output;
+        listener.transformPoint(map_frame, trans_input_vec[i], trans_output);
+        laser_points_map_tmp.x = trans_output.point.x;
+        laser_points_map_tmp.y = trans_output.point.y;
+        laser_points_map.push_back(laser_points_map_tmp);
+      }
+      std::cout << "small trick" << std::endl;
+      ROS_INFO("Transform between laser and map is completed");
     } catch (tf::TransformException &ex) {
-      ROS_ERROR("Get errors in wall detect : %s", ex.what());
+      ROS_ERROR("Get errors in wall detect while requesting transform from laser to map: %s", ex.what());
       ros::Duration(1.0).sleep();
     }
 
-    XYMapVec laser_points_base_left;
-    XYMapVec laser_points_base_right;
-    std::cout << "==============================" << std::endl;
-    for (size_t i = 0; i < laser_points.size(); i++) {
+    // XYMapVec laser_points_map_left;
+    // XYMapVec laser_points_map_right;
+    // std::cout << "==============================" << std::endl;
+    // for (size_t i = 0; i < laser_points.size(); i++) {
 
-      if (laser_points[i].y > 0) {
+    //   if (laser_points[i].y > 0) {
 
-        Eigen::Vector4d v_tmp;
-        v_tmp << laser_points[i].x, laser_points[i].y, 0, 1;
-        Eigen::Vector4d v = base_point * v_tmp;
-        laser_points_base_left.push_back(XYMap(v(0), v(1)));
+    //     Eigen::Vector4d v_tmp;
+    //     v_tmp << laser_points[i].x, laser_points[i].y, 0, 1;
+    //     Eigen::Vector4d v = base_point * v_tmp;
+    //     laser_points_map_left.push_back(XYMap(v(0), v(1)));
 
-      } else if (laser_points[i].y < 0) {
+    //   } else if (laser_points[i].y < 0) {
 
-        Eigen::Vector4d v_tmp;
-        v_tmp << laser_points[i].x, laser_points[i].y, 0, 1;
-        Eigen::Vector4d v = base_point * v_tmp;
-        laser_points_base_right.push_back(XYMap(v(0), v(1)));
+    //     Eigen::Vector4d v_tmp;
+    //     v_tmp << laser_points[i].x, laser_points[i].y, 0, 1;
+    //     Eigen::Vector4d v = base_point * v_tmp;
+    //     laser_points_map_right.push_back(XYMap(v(0), v(1)));
 
-      }
-    }
-    //==========================================
-    visualization_msgs::Marker left_marker, right_marker;
-    left_marker.header.frame_id = 
-    right_marker.header.frame_id = "laser";
-    left_marker.header.stamp = 
-    right_marker.header.stamp = ros::Time::now();
-    left_marker.ns = right_marker.ns = "splited_marker";
-    left_marker.id = 2;
-    right_marker.id = 3;
-    left_marker.type =
-    right_marker.type = visualization_msgs::Marker::POINTS;
-    left_marker.action = 
-    right_marker.action = visualization_msgs::Marker::ADD;
-
-    left_marker.scale.x =
-    right_marker.scale.x = 0.2;
-    left_marker.scale.y =
-    right_marker.scale.y = 0.2;
-    left_marker.scale.z =
-    right_marker.scale.z = 0.2;
-
-    left_marker.color.r = 1.0;
-    left_marker.color.a = 1.0;
-    right_marker.color.b = 1.0;
-    right_marker.color.a = 1.0;
-
-
-    for (size_t i = 0; i < laser_points_base_left.size(); i++) {
-      geometry_msgs::Point p;
-      p.x = laser_points_base_left[i].x;
-      p.y = laser_points_base_left[i].y;
-      left_marker.points.push_back(p);
-    }
-    for (size_t i = 0; i < laser_points_base_right.size(); i++) {
-      geometry_msgs::Point p;
-      p.x = laser_points_base_right[i].x;
-      p.y = laser_points_base_right[i].y;
-      right_marker.points.push_back(p);
-    }
-
-    left_marker_pub.publish(left_marker);
-    right_marker_pub.publish(right_marker);
-
-    std::vector<XYMapVec> laser_left_cut = LineCut(laser_points_base_left);
-    std::vector<XYMapVec> laser_right_cut = LineCut(laser_points_base_right);
+    //   }
+    // }
     
-    std::vector<LineParam> line_left_param, line_right_param;
-    if (laser_left_cut.size() > 0) {
-      line_left_param = LinearFit(laser_left_cut);
+
+    std::vector<XYMapVec> laser_cut = LineCut(laser_points_map);
+    
+    std::vector<LineParam> line_param;
+    if (laser_cut.size() > 0) {
+      line_param = LinearFit(laser_cut);
     } else {
-      line_left_param.push_back(LineParam(0, 0, false));
-    }
-    if (laser_right_cut.size() > 0) {
-      line_right_param = LinearFit(laser_right_cut);
-    } else {
-      line_right_param.push_back(LineParam(0, 0, false));
+      line_param.push_back(LineParam(0, 0, false));
     } // attention! k = 0 and b = 0 can also represent a straight line
     
-    Eigen::Vector2d position(pose.pose.pose.position.x,
-                             pose.pose.pose.position.y);
+    tf::StampedTransform base_transform_map;
+    try {
+      listener.waitForTransform(map_frame, 
+                                base_frame, 
+                                stamp, 
+                                ros::Duration(1.0));
+      listener.lookupTransform(map_frame, 
+                               base_frame, 
+                               stamp, 
+                               base_transform_map);
+      ROS_INFO("Transform between base and map is completed");
+    } catch (tf::TransformException &ex){
+      ROS_ERROR("Get errors in wall detect while requesting transform from base to map: %s", ex.what());
+      ros::Duration(1.0).sleep();
+    }
+    Eigen::Vector2d position(base_transform_map.getOrigin().x(),
+                             base_transform_map.getOrigin().y());
     
-    LineParam line = GetLine(line_left_param, 
-                             line_right_param, 
-                             position);
+    LineParam line = GetLine(line_param, position);
     std::cout << "k is : " << line.k << " and b is : " << line.b << std::endl;
     std::cout << "============================" << std::endl;
-    Eigen::Matrix4d car_point = base_point.inverse();
+    // Eigen::Matrix4d car_point = base_point.inverse();
     
     PubLine(line);
-    PubCircle(base_point);
+    // PubCircle(base_point);
     PubMap();
   }
 
@@ -221,6 +205,9 @@ void WallDetect::ParamInit() {
   }
   if (!nh.getParam("laser_frame", laser_frame)) {
     laser_frame = "base_scan";
+  }
+  if (!nh.getParam("base_frame", base_frame)) {
+    base_frame = "base_link";
   }
   if (!nh.getParam("map_frame", map_frame)) {
     laser_frame = "map";
@@ -397,7 +384,7 @@ void WallDetect::PubLine(const LineParam& line) {
   nav_msgs::Path wall_path;
   wall_path.header.seq++;
   wall_path.header.stamp = ros::Time::now();
-  wall_path.header.frame_id = "laser";
+  wall_path.header.frame_id = base_frame;
 
   geometry_msgs::PoseStamped p1, p2;
   p1.pose.position.x = -10;
@@ -415,8 +402,7 @@ void WallDetect::PubLine(const LineParam& line) {
 
 }
 
-LineParam WallDetect::GetLine(const std::vector<LineParam>& right,
-                              const std::vector<LineParam>& left,
+LineParam WallDetect::GetLine(const std::vector<LineParam>& line_param,
                               const Eigen::Vector2d& position) {
 
   double min_l = 1000000;
@@ -424,10 +410,10 @@ LineParam WallDetect::GetLine(const std::vector<LineParam>& right,
   const double y = position(1);
   LineParam line_final;
 
-  for (size_t i = 0; i < right.size(); i++) {
-    if (right[i].is_line && !std::isnan(right[i].k)) {
-      double k = right[i].k;
-      double b = right[i].b; 
+  for (size_t i = 0; i < line_param.size(); i++) {
+    if (line_param[i].is_line && !std::isnan(line_param[i].k)) {
+      double k = line_param[i].k;
+      double b = line_param[i].b; 
       double l = fabs(k * x - y + b) / sqrt(k * k + 1);
 
       if (l < min_l) {
@@ -438,21 +424,6 @@ LineParam WallDetect::GetLine(const std::vector<LineParam>& right,
       }
     }
   }
-
-  for (size_t i = 0; i < left.size(); i++) {
-    if (left[i].is_line && !std::isnan(left[i].k)) {
-      double k = left[i].k;
-      double b = left[i].b;      
-      double l = fabs(k * x - y + b) / sqrt(k * k + 1);
-
-      if (l < min_l) {
-        line_final.k = k;
-        line_final.b = b;
-        line_final.is_line = true;
-        min_l = l;
-      }
-    }
-  } 
   
   return line_final;
 }

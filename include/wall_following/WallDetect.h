@@ -53,15 +53,15 @@ class WallDetect {
   WallDetect() {}
   ~WallDetect() {}
   // void GetMapCallback(const nav_msgs::OccupancyGrid& map);
-  void FindWall();
+  void FindWallCallback(const ros::TimerEvent&);
   void GetScanCallback(const sensor_msgs::LaserScan& scan);
   void ParamInit();
   void Setup(ros::NodeHandle n);
-  void PublisherInit();
+  void Loop();
+  // void PublisherInit();
   std::vector<XYMapVec> LineCut(const XYMapVec& vec);
   std::vector<LineParam> LinearFit(const std::vector<XYMapVec>& cut);
-  LineParam GetLine(const std::vector<LineParam>& right,
-                    const std::vector<LineParam>& left,
+  LineParam GetLine(const std::vector<LineParam>& line_param,
                     const Eigen::Vector2d& position);
   void PubStart(const Eigen::Matrix4d& base);
   void PubLine(const LineParam& line);
@@ -74,9 +74,10 @@ class WallDetect {
   bool get_laser;
   double limit;
   double angle_limit;
-  size_t least_n;
+  int least_n;
   // Eigen::Matrix4d map_transform;
   std::string laser_frame;
+  std::string base_frame;
   std::string map_frame;
 
   // attention! if multiple nodes initial node handles with ("~")
