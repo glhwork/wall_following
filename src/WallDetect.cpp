@@ -16,7 +16,8 @@ using wall::LineParam;
 WallDetect::WallDetect(ros::NodeHandle n) {
 
   xy_map.clear(); 
-  // map_flag = true; 
+  map_size = 0;
+  get_map = false;
   get_laser = false;
   nh = ros::NodeHandle("~");
   // map_transform = Eigen::Matrix4d::Identity();
@@ -26,52 +27,42 @@ WallDetect::WallDetect(ros::NodeHandle n) {
 
 }
 
-// void WallDetect::GetMapCallback(const nav_msgs::OccupancyGrid& map) {
-//   double reso = map.info.resolution;
-//   int width = map.info.width;
-//   int height = map.info.height;
-//   map_transform(0,3) = map.info.origin.position.x;
-//   map_transform(1,3) = map.info.origin.position.y;
+void WallDetect::GetMapCallback(const nav_msgs::OccupancyGrid& map_msg) {
 
-//   for (size_t i = 0; i < width; i++) {
-//     for (size_t j = 0; j < height; j++) {
-//       //int n = i * width + j;
-//       int n = i + j * height;
-//       if (100 == map.data[n]) {
-//         Eigen::Vector4d v_tmp;
-//         v_tmp << (i + 0.5) * reso, (j + 0.5) * reso, 0, 1;
-//         Eigen::Vector4d v = map_transform * v_tmp;
+  if (abs(map_size - map_msg.data.size()) > update_map_dif) {
+    double reso = map_msg.info.resolution;
+    int width = map_msg.info.width;
+    int height = map_msg.info.height;
+    map_msg_transform(0,3) = map_msg.info.origin.position.x;
+    map_msg_transform(1,3) = map_msg.info.origin.position.y;
 
-//         XYMap xy_map_tmp;
-//         xy_map_tmp.x = v(0);
-//         xy_map_tmp.y = v(1);
-//         xy_map.push_back(xy_map_tmp);
-//       }
-//     }
-//   }
+    for (size_t i = 0; i < width; i++) { 
+      for (size_t j = 0; j < height; j++) {
+        //int n = i * width + j;
+        int n = i + j * height;
+        if (100 == map_msg.data[n]) {
+          Eigen::Vector4d v_tmp;
+          v_tmp << (i + 0.5) * reso, (j + 0.5) * reso, 0, 1;
+          Eigen::Vector4d v = map_msg_transform * v_tmp;
+
+          XYMap xy_map_tmp;
+          xy_map_tmp.x = v(0);
+          xy_map_tmp.y = v(1);
+          xy_map.push_back(xy_map_tmp);
+        }
+      }
+    }
   
-//   map_flag = true;
+    get_map = true;
 
-// }
+  }
+}
 
 
 void WallDetect::FindWallCallback(const ros::TimerEvent&) {
 
-    if (get_laser) {
+  if (get_laser) {
     
-    // Eigen::Vector4d quat(pose.pose.pose.orientation.x,
-    //                      pose.pose.pose.orientation.y,
-    //                      pose.pose.pose.orientation.z,
-    //                      pose.pose.pose.orientation.w);
-    
-    // Eigen::Quaternion<double> q(quat(3), quat(0), quat(1), quat(2));
-    // Eigen::Matrix3d rot = q.matrix();
-
-    // Eigen::Matrix4d base_point = Eigen::Matrix4d::Identity();
-    // base_point.block(0, 0, 3, 3) = rot;
-    // base_point(0, 3) = pose.pose.pose.position.x;
-    // base_point(1, 3) = pose.pose.pose.position.y;
-    // base_point(2, 3) = 0;
     XYMapVec laser_points_map;
     std::vector<geometry_msgs::PointStamped> trans_input_vec;
     ros::Time stamp = ros::Time(0);
@@ -80,7 +71,7 @@ void WallDetect::FindWallCallback(const ros::TimerEvent&) {
       trans_input_tmp.point.x = laser_points[i].x;
       trans_input_tmp.point.y = laser_points[i].y;
       trans_input_tmp.point.z = 0.0;
-      trans_input_tmp.header.frame_id = laser_frame;
+      trans_input_tmp.header.frame_id = laser_frame_id;
       trans_input_tmp.header.stamp = stamp;
 
       trans_input_vec.push_back(trans_input_tmp);
@@ -89,79 +80,55 @@ void WallDetect::FindWallCallback(const ros::TimerEvent&) {
     // this represents pose of laser frame w.r.t. map frame
     tf::StampedTransform laser_to_map;
     try {
-      listener.waitForTransform(map_frame ,
-                                laser_frame, 
+      listener.waitForTransform(map_frame_id ,
+                                laser_frame_id, 
                                 stamp, 
                                 ros::Duration(1.0));
       for (size_t i = 0; i < trans_input_vec.size(); i++) {
         XYMap laser_points_map_tmp;
         geometry_msgs::PointStamped trans_output;
-        listener.transformPoint(map_frame, trans_input_vec[i], trans_output);
+        listener.transformPoint(map_frame_id, 
+                                trans_input_vec[i], 
+                                trans_output);
         laser_points_map_tmp.x = trans_output.point.x;
         laser_points_map_tmp.y = trans_output.point.y;
         laser_points_map.push_back(laser_points_map_tmp);
       }
-      std::cout << "small trick" << std::endl;
-      ROS_INFO("Transform between laser and map is completed");
     } catch (tf::TransformException &ex) {
       ROS_ERROR("Get errors in wall detect while requesting transform from laser to map: %s", ex.what());
       ros::Duration(1.0).sleep();
-    }
-
-    // XYMapVec laser_points_map_left;
-    // XYMapVec laser_points_map_right;
-    // std::cout << "==============================" << std::endl;
-    // for (size_t i = 0; i < laser_points.size(); i++) {
-
-    //   if (laser_points[i].y > 0) {
-
-    //     Eigen::Vector4d v_tmp;
-    //     v_tmp << laser_points[i].x, laser_points[i].y, 0, 1;
-    //     Eigen::Vector4d v = base_point * v_tmp;
-    //     laser_points_map_left.push_back(XYMap(v(0), v(1)));
-
-    //   } else if (laser_points[i].y < 0) {
-
-    //     Eigen::Vector4d v_tmp;
-    //     v_tmp << laser_points[i].x, laser_points[i].y, 0, 1;
-    //     Eigen::Vector4d v = base_point * v_tmp;
-    //     laser_points_map_right.push_back(XYMap(v(0), v(1)));
-
-    //   }
-    // }
-    
+    }     
 
     std::vector<XYMapVec> laser_cut = LineCut(laser_points_map);
     
-    std::vector<LineParam> line_param;
+    std::vector<LineParam> param_vec;
     if (laser_cut.size() > 0) {
-      line_param = LinearFit(laser_cut);
+      param_vec = LinearFit(laser_cut);
     } else {
-      line_param.push_back(LineParam(0, 0, false));
+      param_vec.push_back(LineParam(0, 0, false));
     } // attention! k = 0 and b = 0 can also represent a straight line
-    
+  
     tf::StampedTransform base_transform_map;
     try {
-      listener.waitForTransform(map_frame, 
-                                base_frame, 
+      listener.waitForTransform(map_frame_id, 
+                                base_frame_id, 
                                 stamp, 
                                 ros::Duration(1.0));
-      listener.lookupTransform(map_frame, 
-                               base_frame, 
+      listener.lookupTransform(map_frame_id, 
+                               base_frame_id, 
                                stamp, 
                                base_transform_map);
       ROS_INFO("Transform between base and map is completed");
-    } catch (tf::TransformException &ex){
+    } catch (tf::TransformException &ex) {
       ROS_ERROR("Get errors in wall detect while requesting transform from base to map: %s", ex.what());
       ros::Duration(1.0).sleep();
     }
     Eigen::Vector2d position(base_transform_map.getOrigin().x(),
                              base_transform_map.getOrigin().y());
     
-    LineParam line = GetLine(line_param, position);
+    LineParam line = GetLine(param_vec, position);
     std::cout << "k is : " << line.k << " and b is : " << line.b << std::endl;
     std::cout << "============================" << std::endl;
-    // Eigen::Matrix4d car_point = base_point.inverse();
     
     PubLine(line);
     // PubCircle(base_point);
@@ -203,16 +170,18 @@ void WallDetect::ParamInit() {
   if (!nh.getParam("angle_limit", angle_limit)) {
     angle_limit = 0.088;
   }
-  if (!nh.getParam("laser_frame", laser_frame)) {
-    laser_frame = "base_scan";
+  if (!nh.getParam("laser_frame_id", laser_frame_id)) {
+    laser_frame_id = "base_scan";
   }
-  if (!nh.getParam("base_frame", base_frame)) {
-    base_frame = "base_link";
+  if (!nh.getParam("base_frame_id", base_frame_id)) {
+    base_frame_id = "base_link";
   }
-  if (!nh.getParam("map_frame", map_frame)) {
-    laser_frame = "map";
+  if (!nh.getParam("map_frame_id", map_frame_id)) {
+    map_frame_id = "map";
   }
-
+  if (!nh.getParam("update_map_dif", update_map_dif)) {
+    update_map_dif = 20;
+  }
 
 }
 
@@ -384,7 +353,7 @@ void WallDetect::PubLine(const LineParam& line) {
   nav_msgs::Path wall_path;
   wall_path.header.seq++;
   wall_path.header.stamp = ros::Time::now();
-  wall_path.header.frame_id = base_frame;
+  wall_path.header.frame_id = base_frame_id;
 
   geometry_msgs::PoseStamped p1, p2;
   p1.pose.position.x = -10;
@@ -402,7 +371,7 @@ void WallDetect::PubLine(const LineParam& line) {
 
 }
 
-LineParam WallDetect::GetLine(const std::vector<LineParam>& line_param,
+LineParam WallDetect::GetLine(const std::vector<LineParam>& param_vec,
                               const Eigen::Vector2d& position) {
 
   double min_l = 1000000;
@@ -410,10 +379,10 @@ LineParam WallDetect::GetLine(const std::vector<LineParam>& line_param,
   const double y = position(1);
   LineParam line_final;
 
-  for (size_t i = 0; i < line_param.size(); i++) {
-    if (line_param[i].is_line && !std::isnan(line_param[i].k)) {
-      double k = line_param[i].k;
-      double b = line_param[i].b; 
+  for (size_t i = 0; i < param_vec.size(); i++) {
+    if (param_vec[i].is_line && !std::isnan(param_vec[i].k)) {
+      double k = param_vec[i].k;
+      double b = param_vec[i].b; 
       double l = fabs(k * x - y + b) / sqrt(k * k + 1);
 
       if (l < min_l) {
@@ -431,7 +400,7 @@ LineParam WallDetect::GetLine(const std::vector<LineParam>& line_param,
 std::vector<LineParam> WallDetect::LinearFit(const std::vector<XYMapVec>& cut) {
 
  
-  std::vector<LineParam> line_param;
+  std::vector<LineParam> param_vec;
   
   for (size_t i = 0; i < cut.size(); i++) {
     Eigen::MatrixXd m = Eigen::MatrixXd::Zero(cut[i].size(), 2);
@@ -443,11 +412,11 @@ std::vector<LineParam> WallDetect::LinearFit(const std::vector<XYMapVec>& cut) {
       v(j) = cut[i][j].y;
     }
     Eigen::Vector2d param = m.jacobiSvd(ComputeThinU | ComputeThinV).solve(v);
-    LineParam line_param_tmp(param(0), param(1), true);
-    line_param.push_back(line_param_tmp);
+    LineParam param_vec_tmp(param(0), param(1), true);
+    param_vec.push_back(param_vec_tmp);
   }
 
-  return line_param;
+  return param_vec;
 }
 
 void WallDetect::PubStart(const Eigen::Matrix4d& base) {
