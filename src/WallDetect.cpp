@@ -122,7 +122,7 @@ void WallDetect::FindWallCallback(const ros::TimerEvent&) {
     } catch (tf::TransformException &ex) {
       ROS_ERROR("Get errors in wall detect while requesting transform from base to map: %s", ex.what());
       ros::Duration(1.0).sleep();
-    }
+    } 
     Eigen::Vector2d position(base_transform_map.getOrigin().x(),
                              base_transform_map.getOrigin().y());
     
