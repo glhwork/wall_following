@@ -2,9 +2,9 @@
 
   <node pkg="wall_following" type="wall_detect" name="wall_detect" output="screen">
   	<param name="limit" type="double" value="10.0"/>
-  	<param name="to_line_limit" type="double" value="1.0"/>
-  	<param name="least_n" type="int" value="30"/>
-  	<param name="angle_limit" type="double" value="0.088"/>
+  	<param name="to_line_limit" type="double" value="0.2"/>
+  	<param name="least_n" type="int" value="20"/>
+  	<param name="angle_limit" type="double" value="0.044"/>
   	<param name="laser_frame" type="str" value="base_scan"/>
   	<param name="base_frame" type="str" value="base_link"/>
   	<param name="map_frame" type="str" value="map"/>
@@ -15,7 +15,7 @@
   	<param name="laser_frame" type="str" value="base_scan"/>
   	<param name="base_frame" type="str" value="base_link"/>
   	<param name="map_frame" type="str" value="map"/>
-  	<param name="to_wall_dis" type="double" value="0.2"/>
+  	<param name="to_wall_dis" type="double" value="0.3"/>
   </node>
 
 

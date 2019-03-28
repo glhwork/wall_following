@@ -37,6 +37,8 @@ void WallDetect::GetMapCallback(const nav_msgs::OccupancyGrid& map_msg) {
   }
   
   int map_dif = abs(map_size - map_msg_size);
+  std::cout << "test the wall::PASSABLE value -> " << wall::PASSABLE << std::endl;
+  std::cout << "map difference is : " << map_dif << std::endl; 
   if (map_dif > update_map_dif) {
     double reso = map_msg.info.resolution;
     int width = map_msg.info.width;
@@ -124,7 +126,13 @@ void WallDetect::FindWallCallback(const ros::TimerEvent&) {
     } else {
       return ;
     }
-  
+    
+    geometry_msgs::PoseStamped p_test, p_after;
+    p_test.header.frame_id = base_frame_id;
+    p_test.header.stamp = stamp;
+    p_test.pose.position.x = p_test.pose.position.y = p_test.pose.position.z = 0.0;
+    p_test.pose.orientation.x = p_test.pose.orientation.y = p_test.pose.orientation.z = 0.0;
+    p_test.pose.orientation.w = 1.0;
     tf::StampedTransform base_transform_map;
     try {
       listener.waitForTransform(map_frame_id, 
@@ -135,27 +143,33 @@ void WallDetect::FindWallCallback(const ros::TimerEvent&) {
                                base_frame_id, 
                                stamp, 
                                base_transform_map);
-      ROS_INFO("Transform between base and map is completed");
+      listener.transformPose(map_frame_id, p_test, p_after);
     } catch (tf::TransformException &ex) {
       ROS_ERROR("Get errors in wall detect while requesting transform from base to map: %s", ex.what());
       ros::Duration(1.0).sleep();
     } 
-    Eigen::Vector2d position(base_transform_map.getOrigin().x(),
-                             base_transform_map.getOrigin().y());
+    // Eigen::Vector2d position(base_transform_map.getOrigin().x(),
+    //                          base_transform_map.getOrigin().y());
     
+    Eigen::Vector2d position(p_after.pose.position.x, p_after.pose.position.y);
     LineParam line = GetLine(param_vec, position);
     std::cout << "k is : " << line.k << " and b is : " << line.b << std::endl;
     std::cout << "============================" << std::endl;
     
+    PubWall(line);
+    PubPosition(position);
+    PubLimit(position);
+    PubMap();
     LineParam line_optim = WallCalibrate(line);
+    ROS_INFO("the existence of line is %d", line_optim.is_line);
     if (!line_optim.is_line) {
       return ;
     }
 
-    PubPosition(position);
-    PubLimit(position);
+    // PubPosition(position);
+    // PubLimit(position);
     PubWall(line_optim);
-    PubMap();
+    // PubMap();
   }
 
 }
@@ -267,6 +281,8 @@ LineParam WallDetect::WallCalibrate(LineParam line) {
     res.is_line = false;
   }
 
+  ROS_INFO("Size of map assistance is %d", map_assist.size());
+
   return res;
 
 }
@@ -314,14 +330,14 @@ void WallDetect::PubMap() {
   marker.header.stamp = ros::Time::now();
   marker.header.frame_id = map_frame_id;
   marker.ns = "map_marker";
-  marker.id = 1;
+  marker.id = 3;
   marker.type = visualization_msgs::Marker::POINTS;
   marker.action = visualization_msgs::Marker::ADD;
 
   marker.pose.orientation.w = 1.0;
-  marker.scale.x = 0.1;
-  marker.scale.y = 0.1;
-  marker.scale.z = 0.1;
+  marker.scale.x = 0.5;
+  marker.scale.y = 0.5;
+  marker.scale.z = 0.5;
   marker.color.r = 1.0;
   marker.color.a = 1;
   
@@ -346,7 +362,7 @@ void WallDetect::PubPosition(const Eigen::Vector2d& position) {
   marker.header.stamp = ros::Time::now();
   marker.header.frame_id = map_frame_id;
   marker.ns = "position_marker";
-  marker.id = 1;
+  marker.id = 4;
   marker.type = visualization_msgs::Marker::POINTS;
   marker.action = visualization_msgs::Marker::ADD;
 
@@ -364,7 +380,7 @@ void WallDetect::PubPosition(const Eigen::Vector2d& position) {
   geometry_msgs::Point p;
 
   p.x = position(0);
-  p.y = position(0);
+  p.y = position(1);
   p.z = 0.0;
 
   marker.points.push_back(p);

@@ -110,7 +110,6 @@ void MoveSide::GetPoseCallback(const ros::TimerEvent&) {
                              base_frame_id, 
                              stamp, 
                              base_transform_map);
-    ROS_INFO("Transform between base and map is completed");
   } catch (tf::TransformException &ex) {
     ROS_ERROR("Get errors in move side while requesting transform from base to map: %s", ex.what());
     ros::Duration(1.0).sleep();
