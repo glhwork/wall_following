@@ -28,6 +28,7 @@ include_directories(
 
 add_library(wall-follow
   src/WallDetect.cpp
+  src/MoveSide.cpp
 )
 target_link_libraries(wall-follow
   ${catkin_LIBRARIES}
@@ -42,3 +43,14 @@ target_link_libraries(wall_detect
   wall-follow
   ${catkin_LIBRARIES}
 )
+
+add_executable(move_side
+  src/move_side.cpp
+  src/MoveSide.cpp
+)
+target_link_libraries(move_side
+  yaml-cpp
+  wall-follow
+  ${catkin_LIBRARIES}
+)
+

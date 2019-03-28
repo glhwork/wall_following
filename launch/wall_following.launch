@@ -11,6 +11,12 @@
   	<param name="update_map_dif" type="int" value="20"/>
   </node>
 
+  <node pkg="wall_following" type="move_side" name="move_side" output="screen">
+  	<param name="laser_frame" type="str" value="base_scan"/>
+  	<param name="base_frame" type="str" value="base_link"/>
+  	<param name="map_frame" type="str" value="map"/>
+  	<param name="to_wall_dis" type="double" value="0.2"/>
+  </node>
 
 
 

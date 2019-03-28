@@ -35,7 +35,7 @@ void WallDetect::GetMapCallback(const nav_msgs::OccupancyGrid& map_msg) {
       map_msg_size++;
     }
   }
-  // std::cout << wall::PASSABLE << std::endl;
+  
   int map_dif = abs(map_size - map_msg_size);
   if (map_dif > update_map_dif) {
     double reso = map_msg.info.resolution;
@@ -487,7 +487,8 @@ void WallDetect::PubWall(const LineParam& line) {
 
   nav_msgs::Path wall;
   wall.header.stamp = ros::Time::now();
-  wall.header.frame_id = base_frame_id;
+  // wall.header.frame_id = base_frame_id;
+  wall.header.frame_id = map_frame_id;
 
   geometry_msgs::PoseStamped p1, p2;
   p1.pose.position.x = -10;
