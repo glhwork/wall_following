@@ -114,6 +114,7 @@ void MoveSide::GetPoseCallback(const ros::TimerEvent&) {
     ROS_ERROR("Get errors in move side while requesting transform from base to map: %s", ex.what());
     ros::Duration(1.0).sleep();
   }
+  std::cout << "test the existence of error" << std::endl;
 
   RoboPosi position(base_transform_map.getOrigin().x(),
   	                base_transform_map.getOrigin().y(),
