@@ -73,6 +73,9 @@ class WallDetect {
   LineParam GetLine(const std::vector<LineParam>& param_vec,
                     const Eigen::Vector2d& position);
   LineParam WallCalibrate(LineParam line);
+
+  void PubMapUsed(const XYMapVec& map_used);
+  void PubScanUsed(const XYMapVec& scan_used);
   void PubStart(const Eigen::Matrix4d& base);
   void PubWall(const LineParam& line);
   void PubAccuWall(const XYMapVec& vec, const LineParam& line);
@@ -101,6 +104,8 @@ class WallDetect {
   ros::Publisher wall_accu_pub;
   ros::Publisher limit_pub;
   ros::Publisher map_marker_pub;
+  ros::Publisher map_used_pub;
+  ros::Publisher scan_used_pub;
   ros::Publisher posi_marker_pub;
   ros::Publisher start_pub;
 

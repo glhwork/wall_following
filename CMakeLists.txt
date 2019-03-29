@@ -54,3 +54,10 @@ target_link_libraries(move_side
   ${catkin_LIBRARIES}
 )
 
+add_executable(test_map
+  src/test_map.cpp
+)
+target_link_libraries(test_map
+  yaml-cpp
+  ${catkin_LIBRARIES}
+)

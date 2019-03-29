@@ -59,7 +59,10 @@ class MoveSide {
   ros::NodeHandle nh;
   ros::NodeHandle goal_n;
   ros::Publisher first_goal_pub;
+  ros::Publisher first_wall_pub;
   ros::Publisher goal_marker_pub;
+
+  nav_msgs::Path show_wall;
 	
 };  // class MoveSide
 

@@ -34,14 +34,18 @@ void MoveSide::ParamInit() {
 
 void MoveSide::Setup(ros::NodeHandle n) {
   first_goal_pub = goal_n.advertise<geometry_msgs::PoseStamped>("goal", 10);
+  first_wall_pub = n.advertise<nav_msgs::Path>("first_wall", 10);
   goal_marker_pub = n.advertise<visualization_msgs::Marker>("goal_marker", 10);
 }
 
 void MoveSide::GetWallCallback(const nav_msgs::Path& wall) {
   
   if (send_first_goal) {
+    first_wall_pub.publish(show_wall);
   	return ;
   }  
+  
+  show_wall = wall;
 
   double k, b;
   k = (wall.poses[0].pose.position.y - wall.poses[1].pose.position.y) / 
@@ -79,6 +83,8 @@ void MoveSide::GetWallCallback(const nav_msgs::Path& wall) {
       * Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ());
   // Eigen::Matrix3d rot;
   // rot = q.toRotationMatrix();
+
+  // publish the goal point
   geometry_msgs::PoseStamped goal_msg;
   goal_msg.header.frame_id = map_frame_id;
   goal_msg.header.stamp = ros::Time::now();
@@ -114,7 +120,6 @@ void MoveSide::GetPoseCallback(const ros::TimerEvent&) {
     ROS_ERROR("Get errors in move side while requesting transform from base to map: %s", ex.what());
     ros::Duration(1.0).sleep();
   }
-  std::cout << "test the existence of error" << std::endl;
 
   RoboPosi position(base_transform_map.getOrigin().x(),
   	                base_transform_map.getOrigin().y(),
@@ -124,8 +129,18 @@ void MoveSide::GetPoseCallback(const ros::TimerEvent&) {
   	                   tf_quat.getX(),
   	                   tf_quat.getY(),
   	                   tf_quat.getZ());
-  global_pose = RoboPose(position, orientation);
 
+  global_pose = RoboPose(position, orientation);
+  ROS_INFO("Position of robot is : x = %.2f, y = %.2f, z = %.2f", 
+           global_pose.position.x, 
+           global_pose.position.y, 
+           global_pose.position.z); 
+  ROS_INFO("q_x = %.2f, q_y = %.2f, q_z = %.2f, q_w = %.2f",
+           global_pose.orientation.x(), global_pose.orientation.y(), 
+           global_pose.orientation.z(), global_pose.orientation.w());
+  std::cout << "Rotation Matrix : " << std::endl;
+  std::cout << global_pose.orientation.toRotationMatrix() << std::endl;
+  
   get_pose = true;
 }
 
@@ -136,39 +151,48 @@ RoboPosi MoveSide::FirstGoal(const RoboPosi& inter_point,
   RoboPosi goal;
   
   RoboPosi pose_point = global_pose.position;
-  double a, b, c;
-  a = k_pose * k_pose + 1;
-  b = 2 * (b_pose - inter_point.y) * k_pose - 2 * inter_point.x;
-  c = inter_point.x * inter_point.x 
-      + pow((b_pose - inter_point.y), 2) 
-      - pow(to_wall_dis, 2);
+  // double a, b, c;
+  // a = k_pose * k_pose + 1;
+  // b = 2 * (b_pose - inter_point.y) * k_pose - 2 * inter_point.x;
+  // c = inter_point.x * inter_point.x 
+  //     + pow((b_pose - inter_point.y), 2) 
+  //     - pow(to_wall_dis, 2);
 
-  double root_1, root_2;
-  double delta;
-  delta = b * b - 4 * a * c;
-  if (delta >= 0) {
-  	root_1 = (- b + sqrt(b * b - 4 * a * c)) / (2 * a);
-    root_2 = (- b - sqrt(b * b - 4 * a * c)) / (2 * a);
+  // double root_1, root_2;
+  // double delta;
+  // delta = b * b - 4 * a * c;
+  // if (delta >= 0) {
+  // 	root_1 = (- b + sqrt(b * b - 4 * a * c)) / (2 * a);
+  //   root_2 = (- b - sqrt(b * b - 4 * a * c)) / (2 * a);
 
-    Eigen::Vector2d vec_ref, vec_1, vec_2;
-    vec_ref << inter_point.x - pose_point.x, 
-               inter_point.y - pose_point.y;
-    vec_1 << inter_point.x - root_1,
-             inter_point.y - (k_pose * root_1 + b_pose);
-    vec_2 << inter_point.x - root_2,
-             inter_point.y - (k_pose * root_2 + b_pose);
+  //   Eigen::Vector2d vec_ref, vec_1, vec_2;
+  //   vec_ref << inter_point.x - pose_point.x, 
+  //              inter_point.y - pose_point.y;
+  //   vec_1 << inter_point.x - root_1,
+  //            inter_point.y - (k_pose * root_1 + b_pose);
+  //   vec_2 << inter_point.x - root_2,
+  //            inter_point.y - (k_pose * root_2 + b_pose);
 
-    if (vec_ref.dot(vec_1) > 0.0) {
-      goal.x = vec_1(0);
-      goal.y = vec_1(1);
-    } else if (vec_ref.dot(vec_2) > 0.0) {
-      goal.x = vec_2(0);
-  	  goal.y = vec_2(1);
-    }
+  //   if (vec_ref.dot(vec_1) > 0.0) {
+  //     goal.x = vec_1(0);
+  //     goal.y = vec_1(1);
+  //   } else if (vec_ref.dot(vec_2) > 0.0) {
+  //     goal.x = vec_2(0);
+  // 	  goal.y = vec_2(1);
+  //   }
 
-  } else {
-  	ROS_ERROR("no solution for first goal");
-  } 
+  // } else {
+  // 	ROS_ERROR("no solution for first goal");
+  // } 
+  
+
+  // get the unit vector of reference vector
+  Eigen::Vector2d vec_ref(inter_point.x - pose_point.x, 
+                          inter_point.y - pose_point.y);
+  double ref_norm = sqrt(pow(vec_ref(0), 2) + pow(vec_ref(1), 2));
+  Eigen::Vector2d unit_ref = vec_ref / ref_norm;
+  goal.x = inter_point.x - unit_ref(0) * to_wall_dis;
+  goal.y = k_pose * goal.x + b_pose;
 
   return goal;
 

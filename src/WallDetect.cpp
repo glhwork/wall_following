@@ -37,8 +37,8 @@ void WallDetect::GetMapCallback(const nav_msgs::OccupancyGrid& map_msg) {
   }
   
   int map_dif = abs(map_size - map_msg_size);
-  std::cout << "test the wall::PASSABLE value -> " << wall::PASSABLE << std::endl;
-  std::cout << "map difference is : " << map_dif << std::endl; 
+  // std::cout << "test the wall::PASSABLE value -> " << wall::PASSABLE << std::endl;
+  // std::cout << "map difference is : " << map_dif << std::endl; 
   if (map_dif > update_map_dif) {
     double reso = map_msg.info.resolution;
     int width = map_msg.info.width;
@@ -56,7 +56,7 @@ void WallDetect::GetMapCallback(const nav_msgs::OccupancyGrid& map_msg) {
 
     for (size_t i = 0; i < width; i++) { 
       for (size_t j = 0; j < height; j++) {
-        //int n = i * width + j;
+        // int n = i * width + j;
         int n = i + j * height;
         if (wall::PASSABLE == map_msg.data[n]) {
           Eigen::Vector4d v_tmp;
@@ -121,6 +121,8 @@ void WallDetect::FindWallCallback(const ros::TimerEvent&) {
     std::vector<XYMapVec> laser_cut = LineCut(laser_points_map);
     
     std::vector<LineParam> param_vec;
+
+    std::cout << "size of laser cut" << laser_cut.size() << std::endl;
     if (laser_cut.size() > 0) {
       param_vec = LinearFit(laser_cut);
     } else {
@@ -154,14 +156,13 @@ void WallDetect::FindWallCallback(const ros::TimerEvent&) {
     Eigen::Vector2d position(p_after.pose.position.x, p_after.pose.position.y);
     LineParam line = GetLine(param_vec, position);
     std::cout << "k is : " << line.k << " and b is : " << line.b << std::endl;
-    std::cout << "============================" << std::endl;
+    // std::cout << "============================" << std::endl;
     
     PubWall(line);
     PubPosition(position);
     PubLimit(position);
     PubMap();
     LineParam line_optim = WallCalibrate(line);
-    ROS_INFO("the existence of line is %d", line_optim.is_line);
     if (!line_optim.is_line) {
       return ;
     }
@@ -236,6 +237,8 @@ void WallDetect::Setup(ros::NodeHandle n) {
   wall_accu_pub = n.advertise<nav_msgs::Path>("wall_accu", 100);
   limit_pub = n.advertise<nav_msgs::Path>("circle_limit", 100);
   map_marker_pub = n.advertise<visualization_msgs::Marker>("map_points", 100);
+  map_used_pub = n.advertise<visualization_msgs::Marker>("map_used", 100);
+  scan_used_pub = n.advertise<visualization_msgs::Marker>("scan_used", 100);
   posi_marker_pub = n.advertise<visualization_msgs::Marker>("position_points", 100);
   start_pub = n.advertise<visualization_msgs::Marker>("start_point", 100);
 
@@ -249,41 +252,76 @@ void WallDetect::Loop() {
 
 LineParam WallDetect::WallCalibrate(LineParam line) {
   
-  LineParam res;
-  double k = line.k;
-  double b = line.b; 
-  XYMapVec map_assist;
-  for (size_t i = 0; i < map_2d.size(); i++) {
-    double x = map_2d[i].x;
-    double y = map_2d[i].y;
-    double l = fabs(k * x - y + b) / sqrt(k * k + 1);
-    if (l < to_line_limit) {
-      map_assist.push_back(map_2d[i]);
-    }    
-  }
-  
-  if (map_assist.size() > least_n) {
-    Eigen::MatrixXd m = Eigen::MatrixXd::Zero(map_assist.size(), 2);
-    Eigen::VectorXd v(map_assist.size());
-    for (size_t i = 0; i < map_assist.size(); i++) {
-      m(i, 0) = map_assist[i].x;
-      m(i, 1) = 1;
-      v(i) = map_assist[i].y;
+  if (get_map) {
+    LineParam res;
+    double k = line.k;
+    double b = line.b; 
+    XYMapVec map_assist;
+    for (size_t i = 0; i < map_2d.size(); i++) {
+      double x = map_2d[i].x;
+      double y = map_2d[i].y;
+      double l = fabs(k * x - y + b) / sqrt(k * k + 1);
+      if (l < to_line_limit) {
+        map_assist.push_back(map_2d[i]);
+      }    
     }
-    Eigen::Vector2d param = m.jacobiSvd(ComputeThinU | ComputeThinV).solve(v);
-    res.k = param(0);
-    res.b = param(1);
-    res.is_line = true;
+  
+    if (map_assist.size() > least_n) {
+      Eigen::MatrixXd m = Eigen::MatrixXd::Zero(map_assist.size(), 2);
+      Eigen::VectorXd v(map_assist.size());
+      for (size_t i = 0; i < map_assist.size(); i++) {
+        m(i, 0) = map_assist[i].x;
+        m(i, 1) = 1;
+        v(i) = map_assist[i].y;
+      }
+      Eigen::Vector2d param = m.jacobiSvd(ComputeThinU | ComputeThinV).solve(v);
+      res.k = param(0);
+      res.b = param(1);
+      res.is_line = true;
 
-    PubAccuWall(map_assist, res);
-  } else {
-    ROS_WARN("map points for wall calibration are not enough!!");
-    res.is_line = false;
+      PubAccuWall(map_assist, res);
+      PubMapUsed(map_assist);
+    } else {
+      ROS_WARN("map points for wall calibration are not enough!!");
+      res.is_line = false;
+    }
+
+    ROS_INFO("Size of map assistance is %d", map_assist.size());
+
+    return res;
   }
+}
 
-  ROS_INFO("Size of map assistance is %d", map_assist.size());
+void WallDetect::PubMapUsed(const XYMapVec& map_used) {
+  visualization_msgs::Marker marker;
+  marker.header.stamp = ros::Time::now();
+  marker.header.frame_id = map_frame_id;
+  marker.ns = "map_marker_used";
+  marker.id = 5;
+  marker.type = visualization_msgs::Marker::POINTS;
+  marker.action = visualization_msgs::Marker::ADD;
 
-  return res;
+  marker.pose.orientation.w = 1.0;
+  marker.scale.x = 0.1;
+  marker.scale.y = 0.1;
+  marker.scale.z = 0.1;
+  marker.color.r = 1.0;
+  marker.color.a = 1;
+  
+  for (size_t i = 0; i < map_used.size(); i++) {    
+    
+    geometry_msgs::Point p;
+
+    p.x = map_used[i].x;
+    p.y = map_used[i].y;
+    p.z = 0.0;
+
+    marker.points.push_back(p);
+  }
+  map_used_pub.publish(marker);
+}
+
+void WallDetect::PubScanUsed(const XYMapVec& scan_used) {
 
 }
 
@@ -394,7 +432,7 @@ std::vector<XYMapVec> WallDetect::LineCut(const XYMapVec& vec) {
   std::vector<XYMapVec> result_vec;
   result_vec_tmp.clear();
   result_vec.clear();
-  std::cout << vec.size() << std::endl;
+  // std::cout << vec.size() << std::endl;
 
   int count = 0;
   angle_vec.clear();
@@ -460,7 +498,7 @@ std::vector<XYMapVec> WallDetect::LineCut(const XYMapVec& vec) {
       }  
     }
   }
-  std::cout << "count is : " << count << std::endl;
+  // std::cout << "count is : " << count << std::endl;
   if (result_vec_tmp.size() > least_n) {
     result_vec.push_back(result_vec_tmp);
   }
