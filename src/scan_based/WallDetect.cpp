@@ -1,4 +1,4 @@
-#include "wall_following/WallDetect.h"
+#include "wall_following/scan_based/WallDetect.h"
 
 using Eigen::ComputeThinU;
 using Eigen::ComputeThinV;

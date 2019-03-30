@@ -1,4 +1,4 @@
-#include "wall_following/MoveSide.h"
+#include "wall_following/scan_based/MoveSide.h"
 
 using wall::MoveSide;
 

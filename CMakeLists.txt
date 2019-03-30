@@ -27,16 +27,18 @@ include_directories(
 )
 
 add_library(wall-follow
-  src/WallDetect.cpp
-  src/MoveSide.cpp
+  src/scan_based/WallDetect.cpp
+  src/scan_based/MoveSide.cpp
 )
 target_link_libraries(wall-follow
   ${catkin_LIBRARIES}
 )
 
+# ===== ELF -> scan_based =====
+
 add_executable(wall_detect
-  src/wall_detect.cpp
-  src/WallDetect.cpp
+  src/scan_based/wall_detect.cpp
+  src/scan_based/WallDetect.cpp
 )
 target_link_libraries(wall_detect
   yaml-cpp
@@ -45,8 +47,8 @@ target_link_libraries(wall_detect
 )
 
 add_executable(move_side
-  src/move_side.cpp
-  src/MoveSide.cpp
+  src/scan_based/move_side.cpp
+  src/scan_based/MoveSide.cpp
 )
 target_link_libraries(move_side
   yaml-cpp
@@ -55,9 +57,18 @@ target_link_libraries(move_side
 )
 
 add_executable(test_map
-  src/test_map.cpp
+  src/scan_based/test_map.cpp
 )
 target_link_libraries(test_map
+  yaml-cpp
+  ${catkin_LIBRARIES}
+)
+
+# ===== ELF -> map_based =====
+add_executable(detect
+  src/map_based/detect.cpp
+)
+target_link_libraries(detect
   yaml-cpp
   ${catkin_LIBRARIES}
 )
