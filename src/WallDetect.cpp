@@ -155,7 +155,7 @@ void WallDetect::FindWallCallback(const ros::TimerEvent&) {
     
     Eigen::Vector2d position(p_after.pose.position.x, p_after.pose.position.y);
     LineParam line = GetLine(param_vec, position);
-    std::cout << "k is : " << line.k << " and b is : " << line.b << std::endl;
+    // std::cout << "k is : " << line.k << " and b is : " << line.b << std::endl;
     // std::cout << "============================" << std::endl;
     
     PubWall(line);
@@ -207,6 +207,9 @@ void WallDetect::ParamInit() {
   }
   if (!nh.getParam("least_n", least_n)) {
     least_n = 30;
+  }
+  if (!nh.getParam("map_least_n", map_least_n)) {
+    map_least_n = 50;
   }
   if (!nh.getParam("angle_limit", angle_limit)) {
     angle_limit = 0.088;
@@ -266,7 +269,7 @@ LineParam WallDetect::WallCalibrate(LineParam line) {
       }    
     }
   
-    if (map_assist.size() > least_n) {
+    if (map_assist.size() > map_least_n) {
       Eigen::MatrixXd m = Eigen::MatrixXd::Zero(map_assist.size(), 2);
       Eigen::VectorXd v(map_assist.size());
       for (size_t i = 0; i < map_assist.size(); i++) {
@@ -286,7 +289,7 @@ LineParam WallDetect::WallCalibrate(LineParam line) {
       res.is_line = false;
     }
 
-    ROS_INFO("Size of map assistance is %d", map_assist.size());
+    // ROS_INFO("Size of map assistance is %d", map_assist.size());
 
     return res;
   }

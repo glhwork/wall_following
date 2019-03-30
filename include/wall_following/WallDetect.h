@@ -91,6 +91,7 @@ class WallDetect {
   double limit;
   double angle_limit;
   int least_n;
+  int map_least_n;
   std::string laser_frame_id;
   std::string base_frame_id;
   std::string map_frame_id;

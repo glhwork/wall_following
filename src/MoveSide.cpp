@@ -5,6 +5,8 @@ using wall::RoboOrie;
 using wall::RoboPose;
 using wall::MoveSide;
 
+#define PI 3.1415926
+
 MoveSide::MoveSide(ros::NodeHandle n) {
   get_pose = false;
   send_first_goal = false;
@@ -35,12 +37,14 @@ void MoveSide::ParamInit() {
 void MoveSide::Setup(ros::NodeHandle n) {
   first_goal_pub = goal_n.advertise<geometry_msgs::PoseStamped>("goal", 10);
   first_wall_pub = n.advertise<nav_msgs::Path>("first_wall", 10);
+  to_wall_vec_pub = n.advertise<nav_msgs::Path>("to_wall", 10);
   goal_marker_pub = n.advertise<visualization_msgs::Marker>("goal_marker", 10);
 }
 
 void MoveSide::GetWallCallback(const nav_msgs::Path& wall) {
   
   if (send_first_goal) {
+    to_wall_vec_pub.publish(to_wall_vec);
     first_wall_pub.publish(show_wall);
   	return ;
   }  
@@ -77,7 +81,7 @@ void MoveSide::GetWallCallback(const nav_msgs::Path& wall) {
   	}
   }
   double yaw = FindYaw(wall);
-
+  ROS_ERROR("yaw angle is : %.4f", yaw/PI*180);
   q = Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitX())
       * Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitY())
       * Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ());
@@ -131,15 +135,15 @@ void MoveSide::GetPoseCallback(const ros::TimerEvent&) {
   	                   tf_quat.getZ());
 
   global_pose = RoboPose(position, orientation);
-  ROS_INFO("Position of robot is : x = %.2f, y = %.2f, z = %.2f", 
-           global_pose.position.x, 
-           global_pose.position.y, 
-           global_pose.position.z); 
-  ROS_INFO("q_x = %.2f, q_y = %.2f, q_z = %.2f, q_w = %.2f",
-           global_pose.orientation.x(), global_pose.orientation.y(), 
-           global_pose.orientation.z(), global_pose.orientation.w());
-  std::cout << "Rotation Matrix : " << std::endl;
-  std::cout << global_pose.orientation.toRotationMatrix() << std::endl;
+  // ROS_INFO("Position of robot is : x = %.2f, y = %.2f, z = %.2f", 
+  //          global_pose.position.x, 
+  //          global_pose.position.y, 
+  //          global_pose.position.z); 
+  // ROS_INFO("q_x = %.2f, q_y = %.2f, q_z = %.2f, q_w = %.2f",
+  //          global_pose.orientation.x(), global_pose.orientation.y(), 
+  //          global_pose.orientation.z(), global_pose.orientation.w());
+  // std::cout << "Rotation Matrix : " << std::endl;
+  // std::cout << global_pose.orientation.toRotationMatrix() << std::endl;
   
   get_pose = true;
 }
@@ -193,6 +197,22 @@ RoboPosi MoveSide::FirstGoal(const RoboPosi& inter_point,
   Eigen::Vector2d unit_ref = vec_ref / ref_norm;
   goal.x = inter_point.x - unit_ref(0) * to_wall_dis;
   goal.y = k_pose * goal.x + b_pose;
+  
+
+
+  to_wall_vec.header.frame_id = map_frame_id;
+  to_wall_vec.header.stamp = ros::Time::now();
+  geometry_msgs::PoseStamped p;
+  p.pose.position.x = inter_point.x;
+  p.pose.position.y = inter_point.y;
+  p.pose.orientation.w = 1.0;
+  to_wall_vec.poses.push_back(p);
+
+  p.pose.position.x = goal.x;
+  p.pose.position.y = goal.y;
+  p.pose.orientation.w = 1.0;
+  to_wall_vec.poses.push_back(p); 
+
 
   return goal;
 
@@ -228,10 +248,11 @@ double MoveSide::FindYaw(const nav_msgs::Path& wall) {
   double nv1 = sqrt(pow(v1(0), 2) + pow(v1(1), 2));
   double nv2 = sqrt(pow(v2(0), 2) + pow(v2(1), 2));
   
+  ROS_ERROR("The vector is [x: %.2f, y: %.2f]", v1(0), v1(1));
   if ((nv1 * nv2) == 0) {
   	ROS_ERROR("Get error from move side -> norm of vector is zero");
   }
-  double yaw = v1.dot(v2) / (nv1 * nv2);
+  double yaw = acos(v1.dot(v2) / (nv1 * nv2));
   if (v1(1) < v2(1)) {
   	yaw = -yaw;
   }

@@ -61,8 +61,10 @@ class MoveSide {
   ros::Publisher first_goal_pub;
   ros::Publisher first_wall_pub;
   ros::Publisher goal_marker_pub;
+  ros::Publisher to_wall_vec_pub;
 
   nav_msgs::Path show_wall;
+  nav_msgs::Path to_wall_vec;
 	
 };  // class MoveSide
 
