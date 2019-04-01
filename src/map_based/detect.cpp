@@ -7,6 +7,7 @@ int main(int argc, char** argv) {
   ros::NodeHandle n;
 
   Detection detect;
+  ros::Subscriber map_sub = n.subscribe("map", 100, &Detection::MapCallback, &detect);
   ros::spin();
   return 0;
 }

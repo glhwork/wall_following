@@ -65,10 +65,18 @@ target_link_libraries(test_map
 )
 
 # ===== ELF -> map_based =====
+add_library(detection
+  src/map_based/Detection.cpp
+)
+target_link_libraries(detection
+  ${catkin_LIBRARIES}
+)
+
 add_executable(detect
   src/map_based/detect.cpp
 )
 target_link_libraries(detect
   yaml-cpp
+  detection
   ${catkin_LIBRARIES}
 )
