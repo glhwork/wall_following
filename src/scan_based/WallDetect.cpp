@@ -40,6 +40,7 @@ void WallDetect::GetMapCallback(const nav_msgs::OccupancyGrid& map_msg) {
   // std::cout << "test the wall::PASSABLE value -> " << wall::PASSABLE << std::endl;
   // std::cout << "map difference is : " << map_dif << std::endl; 
   if (map_dif > update_map_dif) {
+    map_2d.clear();
     double reso = map_msg.info.resolution;
     int width = map_msg.info.width;
     int height = map_msg.info.height;
@@ -54,27 +55,46 @@ void WallDetect::GetMapCallback(const nav_msgs::OccupancyGrid& map_msg) {
                                 map_msg.info.origin.orientation.z);
     map_msg_transform.block(0,0, 3,3) = quat_tmp.toRotationMatrix();
 
-    for (size_t i = 0; i < width; i++) { 
-      for (size_t j = 0; j < height; j++) {
-        // int n = i * width + j;
-        int n = i + j * height;
-        if (wall::PASSABLE == map_msg.data[n]) {
-          Eigen::Vector4d v_tmp;
-          v_tmp << (i + 0.5) * reso, (j + 0.5) * reso, 0, 1;
-          Eigen::Vector4d v = map_msg_transform * v_tmp;
+    std::cout << map_msg_transform << std::endl;
 
-          XYMap map_2d_tmp;
-          map_2d_tmp.x = v(0);
-          map_2d_tmp.y = v(1);
-          map_2d.push_back(map_2d_tmp);
-        }
+    // for (size_t i = 0; i < width; i++) { 
+    //   for (size_t j = 0; j < height; j++) {
+    //     // int n = i * width + j;
+    //     int n = i + j * height;
+    //     if (wall::PASSABLE == map_msg.data[n]) {
+    //       Eigen::Vector4d v_tmp;
+    //       // v_tmp << (i + 0.5) * reso, (j + 0.5) * reso, 0, 1;
+    //       v_tmp << (n%width + 0.5) * reso, ((int)(n/width) + 0.5) * reso, 0, 1;
+    //       Eigen::Vector4d v = map_msg_transform * v_tmp;
+
+    //       XYMap map_2d_tmp;
+    //       map_2d_tmp.x = v(0);
+    //       map_2d_tmp.y = v(1);
+    //       map_2d.push_back(map_2d_tmp);
+    //     }
+    //   }
+    // }
+
+    for (size_t i = 0; i < map_msg.data.size(); i++) {
+      if (wall::PASSABLE == map_msg.data[i]) {
+        Eigen::Vector4d v_tmp;
+          // v_tmp << (i + 0.5) * reso, (j + 0.5) * reso, 0, 1;
+        v_tmp << (i%width + 0.5) * reso, ((int)(i/width) + 0.5) * reso, 0, 1;
+        Eigen::Vector4d v = map_msg_transform * v_tmp;
+
+        XYMap map_2d_tmp;
+        map_2d_tmp.x = v(0);
+        map_2d_tmp.y = v(1);
+        map_2d.push_back(map_2d_tmp);
       }
     }
     map_size = map_msg_size;
     get_map = true;
     ROS_INFO("wall detect node - map size difference is %d, map updated", 
              map_dif);
+    PubMap();
   }
+
 }
 
 
@@ -122,7 +142,7 @@ void WallDetect::FindWallCallback(const ros::TimerEvent&) {
     
     std::vector<LineParam> param_vec;
 
-    std::cout << "size of laser cut" << laser_cut.size() << std::endl;
+    // std::cout << "size of laser cut" << laser_cut.size() << std::endl;
     if (laser_cut.size() > 0) {
       param_vec = LinearFit(laser_cut);
     } else {
@@ -161,7 +181,7 @@ void WallDetect::FindWallCallback(const ros::TimerEvent&) {
     PubWall(line);
     PubPosition(position);
     PubLimit(position);
-    PubMap();
+    // PubMap();
     LineParam line_optim = WallCalibrate(line);
     if (!line_optim.is_line) {
       return ;
@@ -376,9 +396,9 @@ void WallDetect::PubMap() {
   marker.action = visualization_msgs::Marker::ADD;
 
   marker.pose.orientation.w = 1.0;
-  marker.scale.x = 0.5;
-  marker.scale.y = 0.5;
-  marker.scale.z = 0.5;
+  marker.scale.x = 0.03;
+  marker.scale.y = 0.03;
+  marker.scale.z = 0.03;
   marker.color.r = 1.0;
   marker.color.a = 1;
   

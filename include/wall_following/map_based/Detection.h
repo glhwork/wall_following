@@ -41,6 +41,21 @@ struct PointPolar {
 };  // struct PointPolar
 typedef std::vector<PointPolar> PointPolarVec;
 
+struct LineParam {
+  LineParam(double k, double b, bool is_line) : k(k), b(b), is_line(is_line) {}
+  LineParam() {}
+  double k;
+  double b;
+  bool is_line;
+};  // struct LineParam
+
+struct WallParam {
+  LineParam param;
+  Point2d start;
+  Point2d end;
+};  // struct WallParam
+typedef std::vector<WallParam> WallParamVec;
+
 enum {
   OCCUPIED = 0,
   PASSABLE = 100,
@@ -60,6 +75,9 @@ class Detection {
   void PoseCallback(const ros::TimerEvent&);
   // transform map from Cartesian to Polar and sort points w.r.t theta
   void PolarMap();
+  // split the map data to several groups
+  void MapPartition();
+  void LinearFit();
 
  private:
   /* PARAMETERS */ 
@@ -69,8 +87,12 @@ class Detection {
   std::string map_frame_id;
   std::string base_frame_id;
   // minimum limit used to judge when to skip some map points
-  double angle_interval;
-  
+  double skip_interval;
+  // the minimum quatity of points in each group
+  int least_n;
+  // the minimum angle value to judge where is the turning point of wall
+  double angle_limit;
+
   /* GLOBAL VARIABLES */
   // used to judge whether a map is received
   bool get_map;
@@ -80,6 +102,10 @@ class Detection {
   Point2dVec map_2d;
   // map data in Polar coordinates
   PointPolarVec map_polar;
+  // vector of several groups of map points
+  std::vector<Point2dVec> points_group;
+  // line parameters of each wall
+  WallParamVec walls;
 
 
   // node handle to get paramters
